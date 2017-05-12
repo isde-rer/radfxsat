@@ -2,10 +2,15 @@
 import os, urllib, tarfile
 from datetime import datetime
 
+def fetch_foxt0(savedir, url="http://www.amsat.org/tlm/ops/FOX1T0.txt"):
+    """Save the satellite reset times"""
+    filepath = os.path.join(savedir,"FOX1T0.txt")
+    r = urllib.urlretrieve(url, filepath)
+    
 def fetch_foxdb(savedir, url="http://www.amsat.org/tlm/ao85/FOXDB.tar.gz"):
     """Save the satellite telemetry and return a list a new files"""
     filepath = os.path.join(savedir,"FOXDB.tar.gz")
-    r = urllib.urlretrieve(url, filepath)
+    r = urllib.urlretrieve(url, filepath)    
     # Only extract new files and return list of new files
     tar = tarfile.open(filepath)
     members = tar.getmembers()
@@ -31,3 +36,8 @@ def fetch_tle(designator,savedir, url="http://www.amsat.org/amsat/ftp/keps/curre
     fh.write(tle)
     fh.close()
     return tle
+
+if __name__ == "__main__":
+    fetch_foxt0('./')
+    fetch_foxdb('./')
+    fetch_tle('AO-85','./')
