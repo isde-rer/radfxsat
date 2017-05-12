@@ -60,7 +60,7 @@
 					title: 'sat data: ' + yname + ', latest is ' + lastNonNull.toFixed(0),
 					legend: 'none',
 					vAxis: { title: yname },
-					hAxis: {title: Date }
+					hAxis: {title: "Date" }
 				};
 				var chart = new google.visualization.LineChart($('#charts').find('#chart' + num).get(0));
 				chart.draw(data, chartOptions); 
