@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+	<head>
+	
+		
+		<script type="text/javascript" src="fox1a.json"></script>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+		<script src="https://www.google.com/jsapi"></script>
+		
+		<script>
+			function drawChart() {
+				var json_data = JSON.parse(sat_data);
+				var data = new google.visualization.DataTable();
+				
+				data.addColumn('number', 'Time');
+				data.addColumn('number', 'LepErrors');
+				
+				for(var i = 0; i < json_data.length; ++i) {
+					var obj = json_data[i];
+					var lepEr = (obj.lep == null ? 0 : obj.lep.Errors);
+					data.addRow([
+						parseFloat(obj.time),
+						parseFloat(lepEr)
+					]);
+					
+				}
+				
+				var chart = new google.visualization.LineChart($('#chart').get(0));
+				
+				chart.draw(data, {
+						   title: 'sat data',
+						   height: 400,
+						   width: 800,
+				}); 
+				
+			}
+			
+			google.load('visualization','1', {
+				packages: ['corechart']
+			});
+			
+			google.setOnLoadCallback(drawChart);
+		</script>
+	</head>
+	
+	<body>
+	
+		<div id ="chart" style="width: 100%;"></div>
+		
+	</body>
+	
+</html>
+	
+	
