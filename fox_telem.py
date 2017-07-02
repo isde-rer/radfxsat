@@ -1,6 +1,6 @@
 import numpy as np
 import datetime as dt
-import glob
+import glob, struct
 
 epoch = dt.datetime(1970,1,1)
 
@@ -9,17 +9,23 @@ def csv_merge_generator(pattern):
         for line in file:
             yield line
 
-class Fox1rttelemetry():
-    def __init__(self,logfiles,t0file):
-        fox1T0 = open(t0file,'r')
+class Fox1rttelemetry(object):
+    def __init__(self,logfiles,t0file="./FOX1TO.txt"):
+        # Read telemetry files
         files=glob.glob(logfiles)
         self.p = np.genfromtxt(files[0],delimiter=',')
         for f in files[1:]:
             d = np.genfromtxt(f,delimiter=',')
             self.p = np.vstack((self.p, d))
+        # Read reset times
+        fox1T0 = open(t0file,'r')        
         self.reset_tstamp = [ epoch + dt.timedelta(seconds=int(x.strip().split(',')[1])/1000) for x in fox1T0.readlines() ]
-        self.calculated_tstamp = [ self.reset_tstamp[r] + uptime for r,uptime in zip(self.resets,self.uptime) ]
-
+        fox1T0.close()
+        try:
+            self.calculated_tstamp = [ self.reset_tstamp[r] + uptime for r,uptime in zip(self.resets,self.uptime) ]
+        except:
+            pass
+            
     def get_column(self,col):
         return self.p[:,col]
 
@@ -45,47 +51,83 @@ class Fox1rttelemetry():
     @property
     def psu_temp(self): return self.get_column(25)/33.6 - 35.68
 
-class Vulcan():
-    def __init__(self,logfiles):
-        files=glob.glob(logfiles)
-        self.p = np.genfromtxt(files[0],delimiter=',')
-        for f in files[1:]:
-            d = np.genfromtxt(f,delimiter=',')
-            self.p = np.vstack((self.p, d))
+class Vulcan(object):
+    def __init__(self,logfiles,t0file="./FOX1T0.txt"):        
+        # Read reset times
+        fox1T0 = open(t0file,'r')
+        self.reset_tstamp = [ epoch + dt.timedelta(seconds=int(x.strip().split(',')[1])/1000) for x in fox1T0.readlines() ]
+        fox1T0.close()
 
+        self.data = []                
+        # Read telemetry files
+        files=glob.glob(logfiles)
+        for f in files:
+            d = np.genfromtxt(f,delimiter=',',dtype=int) #[int]*5+[np.uint8]*20+[int]*38)
+            self.data.append(d)
+        self.p = np.vstack(self.data)
+        vuc = [self.vuc_telemetry(x[5:15]) for x in self.p]
+        lep = [self.lep_telemetry(x[15:25]) for x in self.p]
+        remaining = [ sum(x[25:55]) for x in self.p ]        
+        
+        # Calculate timestamps
+        d2 = [ self.reset_tstamp[x[2]] + dt.timedelta(seconds=x[3]) for x in self.p]
+        tstamp = [ (d - dt.datetime(1970,1,1)).total_seconds() for d in d2 ]
+
+        self.p = sorted(zip(tstamp,vuc,lep,remaining), key=lambda x: x[0])
+        
+        # Filter
+        self.p=filter(lambda x: x[1]['state'] == 3 and x[1]['exp1_state'] == 3 and x[3] == 0,self.p)
+        print "Records ", len(self.p)
+        
+        # Fix data
+        #self.p = zip(self.d2,vuc,lep)
+        for x in self.p:
+            # For some reason the counter cleared to 0 on this day
+            if x[0] >= 1446188802:
+                if x[2]['upsets'] > 0:
+                    x[2]['upsets'] = x[2]['upsets'] + 64
+
+    def vuc_telemetry(self,telemetry):
+        telemetry = ''.join([chr(x) for x in telemetry])
+        (b0,b1,b2,b3,b4,b5,b6,b7,b8,b9) = struct.unpack(">BBBBBBBBBB", telemetry)
+        d = dict({'state': (b0>>4)&0x0F,
+                  'restarts': (b0<<4)&0xF0 | (b1>>4)&0x0F,
+                  'uptime': 16 * ( (b1&0x0F)<<16 | b2<<8 | b3 ),
+                  'exp1_state': (b4>>4)&0x0F,
+                  'exp2_state': (b4&0x0F),
+                  'exp3_state': (b5>>4)&0x0F,
+                  'exp4_state': (b5&0x0F),
+                  'exp1_power': b6,
+                  'exp2_power': b7,
+                  'exp3_power': b8,
+                  'exp4_power': b9,})
+        return d
+
+    def lep_telemetry(self,telemetry):
+        telemetry = ''.join([chr(x) for x in telemetry])
+        (restarts,up3,up2,up1,livetime,errors) = struct.unpack(">BBBBIH", telemetry)
+        d = dict({'restarts': restarts,
+                  'uptime': 16*int( up3*2**16 + up2*2**8 + up1),
+                  'livetime': livetime,
+                  'upsets': errors,
+        })
+        return d
+    
     def get_column(self,col):
         return self.p[:,col]
 
     @property
-    def tstamp(self): return [ epoch + dt.timedelta(seconds=int(x)) for x in self.get_column(0) ]
+    def tstamp(self):
+        return [x[0] for x in self.p]    
 
     @property
-    def fox_uptime(self): return self.get_column(4)
-
+    def exp1_state(self):
+        return [x[1]['exp1_state'] for x in self.p]
+    
     @property
-    def vuc_uptime(self): return self.get_column(7)
-
-    @property
-    def lep_uptime(self): return self.get_column(17)
-
-    @property
-    def fox_resets(self): return self.get_column(3)
-
-    @property
-    def vuc_resets(self): return self.get_column(6)
-
-    @property
-    def lep_resets(self): return self.get_column(16)
-
-    @property
-    def power(self): return [self.get_column(12),self.get_column(13),self.get_column(14),self.get_column(15)]
-
-    @property
-    def lep_livetime(self): return self.get_column(18)
-
-    @property
-    def lep_upsets(self): return self.get_column(19)
-
+    def lep_upsets(self):
+        return [ x[2]['upsets'] for x in self.p]
+    
 def daily_aggregate(dates,values,fn=lambda x,y: x+y):
     aggregate = dict()
     for d,v in zip(dates,values):
@@ -119,11 +161,13 @@ def deltas(dates,values):
         dv[i] = values[i]-values[i-1]
     return (dates,dv)
 
-def changeTimes(dt,values):
+def changeTimes(dt,values,extras=None):
     changeTimes=[]
+    if extras == None:
+        extras=[None]*len(dt)
     for t in range(1,len(dt)):
         if values[t] != values[t-1]:
-            changeTimes.append((dt[t-1],dt[t],values[t-1],values[t]))
+            changeTimes.append((dt[t-1],dt[t],values[t-1],values[t],extras[t-1],extras[t]))
     return changeTimes
 
 def exposureWithUpsets(dt,values):

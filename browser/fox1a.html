@@ -1,87 +1,80 @@
 <!DOCTYPE html>
 <html>
-	<head>
-	
-		
-		<script type="text/javascript" src="fox1a.json"></script>
-		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
-		<script src="https://www.google.com/jsapi"></script>
-		
-		<script>
-			function drawCharts() {
-				charts = [ // each entry in the array is another chart. for each entry, the 0th entry
-				// must have the correctly ordered json path (e.g. obj.lep.Errors) to get the lep errors.
-				// the second argument (1st entry) is the name of what you're plotting. the third argument
-				// is the number of the chart, and the fourth (optional) argument is a scale factor for
-				// the y-axis (for converting time units)
-				[['lep', 'Errors'],'Lep Errors'],
-				[['vuc','Exp 1 Power mW'], 'Experiment 1 Power mW'],
-				[['lep', 'Uptime sec'], 'Uptime Days', 1.0/(60*60*24)] 
-				];
-				for(var i = 0; i < charts.length; ++i) {
-					if(charts[i].length == 3) { // only pass scale factor if it exists
-						drawChart(charts[i][0], charts[i][1], i, charts[i][2]);
-					}
-					else {
-						drawChart(charts[i][0], charts[i][1], i);
-					}
-					
-				}
-			}
-			function drawChart(yval, yname, num, yscale = 1) {
-				var json_data = JSON.parse(sat_data); // assume JSON data is correctly formatted
-				var data = new google.visualization.DataTable();
-				data.addColumn('datetime', 'Time');
-				data.addColumn('number', yname);
-				var lastNonNull = 0;
-				for(var i = 0; i < json_data.length; ++i) {
-					var obj = json_data[i];
-					var last = obj;
-					for(var j = 0; j < yval.length; ++j) { // loop through the json until you reach the
-					// terminal value (e.g. last = last[lep], then last = last[lep][Errors]
-						if(last!=null) {
-							last = last[yval[j]];
-						}
-					}
-					lastNonNull = (last == null ? lastNonNull : last * yscale); // this can be changed later,
-					// but for now we assume that a null data point is one that should be ignored and
-					// instead we plot the previous data point at this time
-					data.addRow([
-						new Date(obj.time * 1000), // handy-dandy Date object takes milliseconds since
-						// unix epoch as constructor parameter
-						parseFloat(lastNonNull)
-					]);
-					
-				} 
-				var nextDivString = '<div style="width: 100%;height:100%;" id="chart' + num + '"></div>';
-				$('#charts').append(nextDivString); // add another div for the next chart
-				
-				var chartOptions = {
-					title: 'sat data: ' + yname + ', latest is ' + lastNonNull.toFixed(0),
-					legend: 'none',
-					vAxis: { title: yname },
-					hAxis: {title: "Date" }
-				};
-				var chart = new google.visualization.LineChart($('#charts').find('#chart' + num).get(0));
-				chart.draw(data, chartOptions); 
-				
-			}
-			
-			google.load('visualization','1', {
-				packages: ['corechart']
-			});
-			
-			google.setOnLoadCallback(drawCharts);
-		</script>
-	</head>
-	
-	<body>
-	
-		<div id ="charts" style="width: 100%;height:100%;"></div>
-		
-		
-	</body>
-	
+  <head>
+    <script type="text/javascript" src="fox1a.json"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="https://www.google.com/jsapi"></script>
+    
+    <script>
+      function drawCharts() {
+      var json_data = JSON.parse(sat_data); // assume JSON data is correctly formatted
+      var data = google.visualization.arrayToDataTable(json_data, false);
+      var chart = null;
+      
+      newLineChart(data, 1, {
+        vAxis: { title: "LEP upsets" },
+        hAxis: { title: "UTC" },
+        width: 600,
+        height: 300,
+        legend: 'none',
+      });
+
+      newLineChart(data, 4, {
+        vAxis: { title: "LEP uptime (hr)" },
+        hAxis: { title: "UTC" },
+        width: 600,
+        height: 300,
+        legend: 'none',
+      });
+
+      newLineChart(data, 2, {
+        vAxis: { title: "LEP restarts", viewWindowMode: "explicit", viewWindow: {max: 255, min: 0} },
+        hAxis: { title: "UTC" },
+        width: 600,
+        height: 300,
+        legend: 'none',
+      });
+
+      newScatterChart(data, 3, {
+        vAxis: { title: "LEP power (mW)", viewWindowMode: "explicit", viewWindow: {max: 120, min: 0}},
+        hAxis: { title: "UTC" },
+        width: 600,
+        height: 300,
+        pointSize: 1,
+        legend: 'none',
+      });
+      
+      }
+
+      function newLineChart(data, num, options) {
+      var view = new google.visualization.DataView(data)
+      view.setColumns([0, num]);
+      var nextDivString = '<div style="width: 100%;height:100%;" id="chart' + num + '"></div>';
+      $('#charts').append(nextDivString); // add another div for the next chart
+      var chart = new google.visualization.LineChart(document.getElementById('chart'+num));
+      chart.draw(view, options);
+      }
+
+      function newScatterChart(data, num, options) {
+      var view = new google.visualization.DataView(data)
+      view.setColumns([0, num]);
+      var nextDivString = '<div style="width: 100%;height:100%;" id="chart' + num + '"></div>';
+      $('#charts').append(nextDivString); // add another div for the next chart
+      var chart = new google.visualization.ScatterChart(document.getElementById('chart'+num));
+      chart.draw(view, options);
+      }
+      
+      google.load('visualization','1', {
+      packages: ['corechart']
+      });
+ 
+      google.setOnLoadCallback(drawCharts);
+ 
+    </script>
+  </head>
+  
+  <body>
+    <div id ="charts" style="width: 500;height:100%;"></div>
+  </body>
+
 </html>
-	
-	
