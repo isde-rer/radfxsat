@@ -103,7 +103,7 @@ class Fox1rttelemetry(object):
     def psu_temp(self): return self.get_column(25)/33.6 - 35.68
 
 class Vulcan(object):
-    def __init__(self,logfiles,t0file="./AO-85/FOX1T0.txt"):
+    def __init__(self,logfiles,t0file="./FOX1T0.txt"):
         # Read reset times
         fox1T0 = open(t0file,'r')
         self.reset_tstamp = [ epoch + dt.timedelta(seconds=int(x.strip().split(',')[1])/1000) for x in fox1T0.readlines() ]
@@ -179,17 +179,23 @@ class Vulcan(object):
     @property
     def lep_upsets(self):
         return [ x[2]['upsets'] for x in self.p]
-    
+
 if __name__ == '__main__':
     import os, sys
     import pickle
     print "Reading real time telemetry files..."
-    #rt = Fox1rttelemetry("./AO-85/FOXDB/Fox1rttelemetry_*.log","./AO-85/FOX1T0.txt")
-    #print "Reading Vulcan telemetry files..."
-    for f in sys.argv[1:]:
+    #rt = Fox1rttelemetry("./FOXDB/Fox1rttelemetry_*.log","./FOX1T0.txt")
+
+    logs = glob.glob("./FOXDB/Fox1radtelemetry_*.log")
+    print "Reading Vulcan telemetry files..."
+    for f in logs:
+        pickleFile=f[:-4]+".pickle"
+        if os.path.exists(pickleFile):
+            continue
+        print "Generating %s" % (pickleFile)
         vulcan = Vulcan(f,"./FOX1T0.txt")
         # Not interested in LEP data that contains 0's. Probably "bad".
         g=filter(lambda x:  x[3]['upsets'] != 0,vulcan.p)
-        fh = open(f[:-4]+'.pickle','w')
+        fh = open(pickleFile,'w')
         pickle.dump(g,fh)
         fh.close()
